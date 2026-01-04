@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>InfoDose EYE · OS v4.2</title>
+    
+    <!-- PWA / Mobile Meta -->
+
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#020408">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker Registered'));
+  }
+</script>
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;900&display=swap">
+
+    <style>
+        :root {
+            --bg: #020408;
+            --header-h: 60px;
+            --primary: #00f5ff;
+            --accent: #7000ff;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --border: rgba(255, 255, 255, 0.08);
+            --font-main: 'Inter', sans-serif;
+            --font-code: 'JetBrains Mono', monospace;
+            --glass: blur(25px) saturate(180%);
+            --panel-bg: rgba(5, 7, 12, 0.98);
+            --safe-top: env(safe-area-inset-top, 0px);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        *::-webkit-scrollbar { display: none; }
+        
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: var(--font-main); height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- EYE HEADER CORE --- */
+        #eye-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+            background: rgba(2, 4, 8, 0.85); backdrop-filter: var(--glass);
+            border-bottom: 1px solid var(--border);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            height: calc(var(--header-h) + var(--safe-top));
+            overflow: hidden;
+        }
+
+        /* States */
+        #eye-header.sanfona { height: 45vh; }
+        #eye-header.expanded { height: 100vh; background: var(--panel-bg); }
+        #eye-header.mini { 
+            height: 48px; width: 48px; right: 15px; top: calc(15px + var(--safe-top)); 
+            border-radius: 50%; border: 1px solid var(--primary);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.4);
+            background: var(--bg);
+        }
+
+        /* Status Bar (O Olho) */
+        .status-bar {
+            height: calc(var(--header-h) + var(--safe-top)); 
+            padding: var(--safe-top) 20px 0;
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer;
+        }
+        .sys-identity { display: flex; align-items: center; gap: 10px; font-size: 0.7rem; font-weight: 900; letter-spacing: 1.5px; }
+        .sys-identity span { color: var(--primary); text-shadow: 0 0 8px var(--primary); }
+        
+        /* orb container kept small — UNO loader will size inside */
+        #orb-canvas-container { width: 36px; height: 36px; position: relative; display:flex; align-items:center; justify-content:center; }
+
+        /* Container of full OS content */
+        .os-container {
+            height: calc(100vh - var(--header-h));
+            display: flex; flex-direction: column;
+            padding: 20px; gap: 20px; opacity: 0; transition: 0.3s;
+            overflow-y: auto;
+        }
+        #eye-header.expanded .os-container, #eye-header.sanfona .os-container { opacity: 1; }
+
+        .os-section { 
+            background: rgba(255,255,255,0.03); 
+            border: 1px solid var(--border); 
+            border-radius: 20px; padding: 20px; 
+            display: flex; flex-direction: column; gap: 15px; 
+        }
+        .sec-title { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; font-weight: 800; letter-spacing: 2px; }
+
+        .app-dock { display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 15px; }
+        .app-card { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
+        .app-thumb {
+            width: 60px; height: 60px; border-radius: 18px; background: #000;
+            border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; overflow: hidden; position: relative;
+        }
+        .app-card.active .app-thumb { border-color: var(--primary); box-shadow: 0 0 15px rgba(0, 245, 255, 0.3); }
+        .app-label { font-size: 0.6rem; color: var(--muted); font-weight: 700; text-align: center; }
+
+        #monaco-lite {
+            width: 100%; height: 250px; background: #000; border: 1px solid var(--border); 
+            border-radius: 14px; color: var(--primary); font-family: var(--font-code); 
+            padding: 15px; font-size: 0.8rem; resize: none;
+        }
+
+        .input-min {
+            background: transparent; border: none; border-bottom: 1px solid var(--border);
+            color: #fff; padding: 10px 0; font-size: 0.9rem; width: 100%;
+        }
+
+        .btn-row { display: flex; gap: 10px; }
+        .btn {
+            flex: 1; padding: 14px; border-radius: 12px; border: 1px solid var(--border);
+            background: rgba(255,255,255,0.05); color: #fff; font-weight: 800; font-size: 0.75rem;
+            text-transform: uppercase; cursor: pointer; transition: 0.2s;
+        }
+        .btn-main { background: var(--primary); color: #000; border: none; }
+        .btn-mini { padding: 6px 10px; font-size: 0.6rem; }
+
+        #stage { position: fixed; inset: 0; background: var(--bg); z-index: 1; padding-top: calc(var(--header-h) + var(--safe-top)); }
+        iframe { width: 100%; height: 100%; border: none; background: #fff; }
+        
+        #empty-state {
+            height: 100%; display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; opacity: 0.2; text-align: center;
+        }
+
+        #eye-header.mini .os-container, #eye-header.mini .status-bar > *:not(.orb-wrapper) { display: none; }
+        #eye-header.mini .status-bar { padding: 0; justify-content: center; height: 100%; }
+        .orb-wrapper { display: flex; align-items: center; gap: 10px; }
+
+        @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .hidden { display: none; }
+
+        /* -------------------------
+           UNO Loader styles (from your file)
+           ------------------------- */
+        /* Colours used in the UNO loader */
+        :root { --g1: #F0F; --g2: #0FF; }
+
+        .di-loader {
+          --di-size: 36px;
+          position: relative;
+          width: var(--di-size);
+          height: var(--di-size);
+        }
+        .di-ring {
+          position: absolute;
+          inset: 0;
+          background: conic-gradient(from 90deg, var(--g1), var(--g2));
+          border-radius: 50%;
+          -webkit-mask: radial-gradient(
+            farthest-side,
+            transparent calc(50% - 1px),
+            #000 calc(50% - 1px),
+            #000 100%
+          );
+          mask: radial-gradient(
+            farthest-side,
+            transparent calc(50% - 1px),
+            #000 calc(50% - 1px),
+            #000 100%
+          );
+          animation: spin 6s linear infinite;
+        }
+        .di-stroke {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 64%;
+          height: 2px;
+          background: linear-gradient(90deg, var(--g1), var(--g2));
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          animation: breath 2.4s ease-in-out infinite;
+        }
+        .di-dots {
+          position: absolute;
+          inset: 0;
+          transform: rotate(-90deg);
+          animation: orbit 4.2s linear infinite;
+        }
+        .di-dots i {
+          --i: 0;
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: conic-gradient(var(--g1), var(--g2));
+          -webkit-mask: radial-gradient(circle, #000 62%, transparent 63%);
+          mask: radial-gradient(circle, #000 62%, transparent 63%);
+          opacity: 0.85;
+          transform: rotate(calc(var(--i) * 51deg)) translate(
+            calc(7px + var(--i) * 2.2px)
+          ) rotate(calc(var(--i) * -51deg));
+          animation: pulse 4.2s linear infinite;
+          animation-delay: calc(var(--i) * 0.6s);
+        }
+        @keyframes orbit { to { transform: rotate(270deg); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes breath {
+          0%,100% { opacity: 0.9; } 50% { opacity: 1; }
+        }
+        @keyframes pulse {
+          0%,70% { opacity: 0.55; transform: scale(0.92); }
+          76%,84% { opacity: 1; transform: scale(1.12); }
+          100% { opacity: 0.7; transform: scale(0.96); }
+        }
+    </style>
+</head>
+<body>
+
+    <header id="eye-header">
+        <div class="status-bar" onclick="OS.handleHeaderClick(event)">
+            <div class="orb-wrapper">
+                <div id="orb-canvas-container">
+                  <!-- UNO loader markup inserted here -->
+                  <span class="di-loader" aria-hidden="true">
+                    <span class="di-ring"></span>
+                    <span class="di-stroke"></span>
+                    <span class="di-dots">
+                      <i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i>
+                    </span>
+                  </span>
+                </div>
+                <div class="sys-identity">EYE <span>OS v4.2</span></div>
+            </div>
+            
+            <div class="sys-identity" style="gap: 15px">
+                <div id="active-app-name" style="color:var(--muted); font-size: 0.6rem">IDLE</div>
+                <div id="clock" style="font-family: var(--font-code)">00:00</div>
+                <button class="btn btn-mini" onclick="OS.toggleMini(event)">ORB</button>
+            </div>
+        </div>
+
+        <div class="os-container">
+            <!-- Módulos -->
+            <div class="os-section">
+                <div class="sec-title">Installed Modules</div>
+                <div class="app-dock" id="app-grid"></div>
+            </div>
+
+            <!-- Editor -->
+            <div class="os-section">
+                <div class="sec-title">Live Code Editor</div>
+                <input type="text" id="in-name" class="input-min" placeholder="Module Name...">
+                <textarea id="monaco-lite" spellcheck="false" placeholder="<html>...</html>"></textarea>
+                <div class="btn-row">
+                    <button class="btn btn-main" onclick="Core.installEditor()">Install</button>
+                    <button class="btn" onclick="Core.patch()">Hot Patch</button>
+                </div>
+            </div>
+
+            <!-- System -->
+            <div class="os-section">
+                <div class="sec-title">System Kernel</div>
+                <div class="btn-row">
+                    <button class="btn" onclick="IO.downloadDB()">Backup</button>
+                    <button class="btn" style="color: #ff5555" onclick="Core.nuke()">Nuke OS</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="stage">
+        <div id="empty-state">
+            <h1 style="font-size: 3rem; margin: 0">EYE</h1>
+            <p>Select a module to begin</p>
+        </div>
+        <iframe id="main-view" class="hidden"></iframe>
+    </main>
+
+    <script>
+        /**
+         * CORE: IndexedDB Persistence (unchanged)
+         */
+        const Core = {
+            db: null,
+            apps: [],
+            activeId: null,
+
+            async init() {
+                return new Promise(res => {
+                    const req = indexedDB.open('EYE_OS_v42', 1);
+                    req.onupgradeneeded = e => {
+                        e.target.result.createObjectStore('modules', { keyPath: 'id', autoIncrement: true });
+                    };
+                    req.onsuccess = e => {
+                        this.db = e.target.result;
+                        this.refresh();
+                        res();
+                    };
+                });
+            },
+
+            async refresh() {
+                const tx = this.db.transaction('modules', 'readonly');
+                tx.objectStore('modules').getAll().onsuccess = e => {
+                    this.apps = e.target.result;
+                    OS.renderApps(this.apps);
+                };
+            },
+
+            installEditor() {
+                const name = document.getElementById('in-name').value || 'APP_' + Date.now().toString().slice(-4);
+                const content = document.getElementById('monaco-lite').value;
+                if(!content) return;
+
+                const hue = Math.floor(Math.random() * 360);
+                const thumb = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="hsl(${hue},20%,5%)"/><text x="50%" y="60%" fill="hsl(${hue},100%,70%)" font-size="50" font-family="sans-serif" font-weight="900" text-anchor="middle">${name[0].toUpperCase()}</text></svg>`;
+
+                const tx = this.db.transaction('modules', 'readwrite');
+                tx.objectStore('modules').add({ name, content, thumb, created: Date.now() });
+                tx.oncomplete = () => {
+                    this.refresh();
+                    OS.setState(0);
+                    OS.notify("INSTALLED");
+                };
+            },
+
+            launch(id) {
+                const app = this.apps.find(a => a.id === id);
+                if(!app) return;
+                this.activeId = id;
+                
+                document.getElementById('active-app-name').textContent = app.name.toUpperCase();
+                document.getElementById('in-name').value = app.name;
+                document.getElementById('monaco-lite').value = app.content;
+
+                const view = document.getElementById('main-view');
+                const empty = document.getElementById('empty-state');
+                
+                const blob = new Blob([app.content], { type: 'text/html' });
+                view.src = URL.createObjectURL(blob);
+                view.classList.remove('hidden');
+                empty.classList.add('hidden');
+
+                OS.setState(0);
+            },
+
+            patch() {
+                if(!this.activeId) return;
+                const app = this.apps.find(a => a.id === this.activeId);
+                app.content = document.getElementById('monaco-lite').value;
+                app.name = document.getElementById('in-name').value;
+                
+                const tx = this.db.transaction('modules', 'readwrite');
+                tx.objectStore('modules').put(app);
+                tx.oncomplete = () => {
+                    this.launch(this.activeId);
+                    OS.notify("PATCHED");
+                };
+            },
+
+            delete(id, e) {
+                e.stopPropagation();
+                if(!confirm("Delete Module?")) return;
+                const tx = this.db.transaction('modules', 'readwrite');
+                tx.objectStore('modules').delete(id);
+                tx.oncomplete = () => this.refresh();
+            },
+
+            nuke() {
+                if(confirm("Wipe System?")) {
+                    indexedDB.deleteDatabase('EYE_OS_v42');
+                    location.reload();
+                }
+            }
+        };
+
+        /**
+         * OS: Interface & Gestures (unchanged)
+         */
+        const OS = {
+            state: 0, // 0: col, 1: snf, 2: full
+
+            handleHeaderClick(e) {
+                if (e.target.closest('.btn') || e.target.closest('.app-card')) return;
+                this.state = (this.state + 1) % 3;
+                this.setState(this.state);
+            },
+
+            setState(s) {
+                this.state = s;
+                const header = document.getElementById('eye-header');
+                header.classList.remove('sanfona', 'expanded', 'mini');
+                if (s === 1) header.classList.add('sanfona');
+                if (s === 2) header.classList.add('expanded');
+            },
+
+            toggleMini(e) {
+                e.stopPropagation();
+                document.getElementById('eye-header').classList.toggle('mini');
+            },
+
+            renderApps(apps) {
+                const grid = document.getElementById('app-grid');
+                grid.innerHTML = apps.map(app => `
+                    <div class="app-card ${Core.activeId === app.id ? 'active' : ''}" onclick="Core.launch(${app.id})">
+                        <div class="app-thumb">
+                            <img src="${app.thumb}" style="width:100%">
+                            <div style="position:absolute; top:2px; right:4px; font-size:10px; color:red" onclick="Core.delete(${app.id}, event)">✕</div>
+                        </div>
+                        <div class="app-label">${app.name}</div>
+                    </div>
+                `).join('');
+            },
+
+            notify(msg) {
+                const clock = document.getElementById('clock');
+                const original = clock.textContent;
+                clock.textContent = msg;
+                clock.style.color = 'var(--primary)';
+                setTimeout(() => {
+                    clock.textContent = original;
+                    clock.style.color = '';
+                }, 1500);
+            }
+        };
+
+        const IO = {
+            downloadDB() {
+                const blob = new Blob([JSON.stringify(Core.apps)], {type:'application/json'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `eye_os_backup.json`;
+                a.click();
+            }
+        };
+
+        // Initialize (no Three.js / no Orb.init)
+        window.onload = () => {
+            Core.init();
+            setInterval(() => {
+                const d = new Date();
+                document.getElementById('clock').innerText = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
